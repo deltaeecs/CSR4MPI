@@ -59,7 +59,8 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         working-directory: build
         run: |
-          ctest --output-on-failure -C ${{ matrix.build_type }}
+          # Skip MUMPS MPI test on Windows due to missing MSYS2 runtime DLLs
+          ctest --output-on-failure -C ${{ matrix.build_type }} -E mpi_mumps_adapter_4proc
 
       - name: Upload test log artifact on failure
         if: failure()

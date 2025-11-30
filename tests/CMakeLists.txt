@@ -257,3 +257,11 @@ if(CSR4MPI_ENABLE_MUMPS)
                         "Provide -DMUMPS_INCLUDE_DIR and -DMUMPS_EXTRA_LIBS (e.g., dmumps;mumps_common;openblas).")
     endif()
 endif()
+
+# Provide data directory for MatrixMarket-based tests
+set(CSR4MPI_TEST_DATA_DIR ${CMAKE_SOURCE_DIR}/tests/data)
+file(MAKE_DIRECTORY ${CSR4MPI_TEST_DATA_DIR})
+if (EXISTS ${CSR4MPI_TEST_DATA_DIR})
+    # Apply environment to all tests so they can find data
+    set_property(GLOBAL PROPERTY CTEST_ENVIRONMENT "CSR4MPI_DATA_DIR=${CSR4MPI_TEST_DATA_DIR}")
+endif()
