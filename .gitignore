@@ -1,0 +1,57 @@
+# Build directories
+build/
+cmake-build*/
+out/
+ThirdParty/*
+
+# CMake caches and files
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+install_manifest.txt
+
+# Ninja/VS files
+*.ninja
+.ninja_deps
+.ninja_log
+*.sln
+*.vcxproj*
+
+# IDE/editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Dependencies (FetchContent)
+_deps/
+
+# Binaries
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+*.pdb
+*.obj
+*.o
+
+# Generated test/bench artifacts
+tests/matrices/*.mtx
+tests/matrices/*.tar.gz
+
+# Logs
+Testing/
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+build*
+.vscode*
+*.exe
+*.obj
+*.dll
+*.lib
+*.pdb
