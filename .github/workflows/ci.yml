@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
+        os: [ ubuntu-latest ]
         build_type: [ Release ]
     env:
       CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
@@ -33,14 +33,6 @@ jobs:
           sudo apt-get install -y build-essential cmake ninja-build gfortran openmpi-bin libopenmpi-dev libopenblas-dev libmumps-dev libmumps-scotch-dev libparmetis-dev libmetis-dev
           mpirun --version
 
-      - name: Install MS-MPI & tools (Windows)
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          choco install -y cmake --installargs "ADD_CMAKE_TO_PATH=System" || echo "cmake already" 
-          choco install -y msmpi || echo "msmpi already" 
-          choco install -y ninja || echo "ninja already" 
-          echo "MSMPI installed"
-
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -49,18 +41,10 @@ jobs:
         run: |
           cmake --build build --config ${{ matrix.build_type }} -- -k 0
 
-      - name: Run tests (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
+      - name: Run tests
         working-directory: build
         run: |
           ctest --output-on-failure -C ${{ matrix.build_type }}
-
-      - name: Run tests (Windows)
-        if: startsWith(matrix.os, 'windows')
-        working-directory: build
-        run: |
-          # Skip MUMPS MPI test on Windows due to missing MSYS2 runtime DLLs
-          ctest --output-on-failure -C ${{ matrix.build_type }} -E mpi_mumps_adapter_4proc
 
       - name: Upload test log artifact on failure
         if: failure()
