@@ -55,17 +55,6 @@ echo "https://your-storage/MM/HB/add32.tar.gz" >> scripts/matrices.txt
 bash scripts/download_matrices.sh
 ```
 
-WSL NAT 场景中的 localhost 代理会导致访问失败，脚本已自动清理 `http_proxy/https_proxy` 环境变量。
-
-PowerShell 手动示例（单个矩阵 bcsstk13）：
-
-```powershell
-Invoke-WebRequest -Uri https://sparse.tamu.edu/MM/Boeing/bcsstk13.tar.gz -OutFile bcsstk13.tar.gz
-tar -xzf bcsstk13.tar.gz
-Move-Item .\bcsstk13\bcsstk13.mtx .\tests\matrices\bcsstk13.mtx
-Remove-Item bcsstk13.tar.gz; Remove-Item -Recurse -Force .\bcsstk13
-```
-
 ## 运行测试
 
 构建后在 `build`：
@@ -120,7 +109,6 @@ mpiexec -n 4 .\csr4mpi_bench_spmv.exe bcsstk13.mtx 20
 .\csr4mpi_gen_mm.exe 12000 12000 10 1 .\tests\matrices\synthetic_12k10_sym_lower.mtx
 mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_8k12_general.mtx 20
 mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_12k10_sym_lower.mtx 20
-```
 ```
 
 ## 标量类型切换
