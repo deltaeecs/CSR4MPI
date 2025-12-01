@@ -45,7 +45,7 @@ bash scripts/download_matrices.sh
 - `bcsstk13.mtx` (Boeing group) – 中等规模结构矩阵
 - `add32.mtx` (HB group) – 较小测试矩阵
 
-文件放置到 `tests/matrices/`。若访问失败请手动前往 <https://sparse.tamu.edu/> 对应页面下载 tar.gz 后解压并将 `.mtx` 文件置于该目录。
+文件放置到 `tests/data/`。若访问失败请手动前往 <https://sparse.tamu.edu/> 对应页面下载 tar.gz 后解压并将 `.mtx` 文件置于该目录。
 
 也支持通过 `scripts/matrices.txt` 指定自定义下载清单（每行一个 `.tar.gz` 完整 URL；忽略以 `#` 开头的行）：
 

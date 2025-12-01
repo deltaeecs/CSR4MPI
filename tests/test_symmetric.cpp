@@ -32,7 +32,7 @@ static cCSRMatrix LoadSymLower(const std::string& rel)
 
 TEST(SymmetricTest, SpMVLowerTriangleExpansion)
 {
-    auto A = LoadSymLower("/tests/matrices/sym3_lower.mtx");
+    auto A = LoadSymLower("/tests/data/sym3_lower.mtx");
     ASSERT_TRUE(A.bIsSymmetric());
     std::vector<vScalar> x { static_cast<vScalar>(1), static_cast<vScalar>(2), static_cast<vScalar>(3) };
     std::vector<vScalar> y;
@@ -47,7 +47,7 @@ TEST(SymmetricTest, SpMVLowerTriangleExpansion)
 
 TEST(SymmetricTest, SpMMLowerTriangleExpansion)
 {
-    auto A = LoadSymLower("/tests/matrices/sym3_lower.mtx");
+    auto A = LoadSymLower("/tests/data/sym3_lower.mtx");
     iSize nCols = 2;
     // X shape 3 x 2, column-major; columns: [1 2 3]^T and [2 0 1]^T
     std::vector<vScalar> X { static_cast<vScalar>(1), static_cast<vScalar>(2), static_cast<vScalar>(3),

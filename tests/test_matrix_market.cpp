@@ -19,7 +19,7 @@ static cCSRMatrix BuildFromMM(const std::string& path)
 
 TEST(MatrixMarketTest, Lap5SpMVOnes)
 {
-    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/matrices/lap5.mtx";
+    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/data/lap5.mtx";
     auto A = BuildFromMM(path);
     std::vector<vScalar> x(static_cast<size_t>(A.iGlobalColCount()), static_cast<vScalar>(1));
     std::vector<vScalar> y;
@@ -34,7 +34,7 @@ TEST(MatrixMarketTest, Lap5SpMVOnes)
 
 TEST(MatrixMarketTest, Small4DuplicateAccumulation)
 {
-    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/matrices/small4.mtx";
+    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/data/small4.mtx";
     auto A = BuildFromMM(path);
     // Check duplicated (3,4) aggregated to 14
     const auto& rowPtr = A.vRowPtr();
@@ -68,7 +68,7 @@ TEST(MatrixMarketTest, Small4DuplicateAccumulation)
 
 TEST(MatrixMarketTest, Dup3AccumulationAndSpMV)
 {
-    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/matrices/dup3.mtx";
+    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/data/dup3.mtx";
     auto A = BuildFromMM(path);
     // Row0 col0 should be 3 (1+2)
     const auto& rowPtr = A.vRowPtr();

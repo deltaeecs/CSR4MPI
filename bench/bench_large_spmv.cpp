@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
     std::string matrixFile = (argc > 1 ? argv[1] : "bcsstk13.mtx");
-    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/matrices/" + matrixFile;
+    std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/data/" + matrixFile;
     std::vector<iIndex> gRP, gCI;
     std::vector<vScalar> gV;
     iIndex gRows = 0, gCols = 0;
