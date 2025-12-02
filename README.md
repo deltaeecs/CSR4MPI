@@ -143,12 +143,19 @@ mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_12k10_sym_lower.mtx 20
 - `bench/bench_large_spmv.cpp`：SpMV 性能基准。
 - `tests/`：GoogleTest 单元与 MPI 分布式测试。
 
-## 后续改进方向
+## TODO
 
-- 更高效装配（行内列索引二分/哈希）。
-- SpMM 进一步通信压缩与重用。
-- 更多矩阵与可复现基准统计 (CSV)。
+- [ ] 更高效装配（行内列索引二分/哈希查找）
+- [ ] SpMM 进一步通信压缩与重用优化
+- [ ] 更多矩阵与可复现基准统计 (CSV 导出)
+- [ ] 增加 GPU (CUDA/HIP) 后端支持
+- [ ] 支持更多稀疏矩阵格式 (COO/ELL/BSR)
+- [ ] 添加预条件子接口 (Jacobi/ILU)
+- [ ] 完善迭代求解器集成 (CG/GMRES)
+- [ ] 增加更详细的 API 文档和使用示例
+- [ ] 支持 CMake 导出和安装目标
+- [ ] 增加 CI/CD 自动化测试工作流
 
 ## License
 
-本项目当前为实验性质；请在引用/分发前确认后续 License 或附加条款更新。
+本项目基于 [MIT License](LICENSE) 开源。
