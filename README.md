@@ -3,6 +3,7 @@
 一个支持分布式（按连续行块划分）与对称存储扩展的 C++17 CSR 稀疏矩阵库，集成 MPI（可选）、OpenMP（可选）、GoogleTest 单元测试与 MUMPS 导出适配。提供标量类型冷切换（float/double/complex<float>/complex<double>），含远程条目通信装配与对称矩阵的上下三角展开。
 
 > 当前构建为静态库 `csr4mpi` + 测试可执行 `csr4mpi_tests`；不再包含示例 `main` 可执行程序。
+> 项目完全使用 Github Copilot 开发，用时 3 小时左右。
 
 ## 主要特性
 
