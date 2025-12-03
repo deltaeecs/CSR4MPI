@@ -10,16 +10,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(src)
 
-include(FetchContent)
+# GTest discovery: prefer system find_package, fallback to FetchContent
+option(CSR4MPI_FORCE_FETCH_GTEST "Force FetchContent for GoogleTest instead of find_package" OFF)
 
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
-)
+if(NOT CSR4MPI_FORCE_FETCH_GTEST)
+    find_package(GTest QUIET)
+endif()
 
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+if(GTest_FOUND OR GTEST_FOUND)
+    message(STATUS "Using system GTest via find_package")
+else()
+    message(STATUS "GTest not found via find_package, using FetchContent")
+    include(FetchContent)
 
-FetchContent_MakeAvailable(googletest)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 include(CTest)
 enable_testing()
