@@ -17,7 +17,7 @@ if(NOT CSR4MPI_FORCE_FETCH_GTEST)
     find_package(GTest QUIET)
 endif()
 
-if(GTest_FOUND)
+if(GTest_FOUND OR GTEST_FOUND)
     message(STATUS "Using system GTest via find_package")
 else()
     message(STATUS "GTest not found via find_package, using FetchContent")
