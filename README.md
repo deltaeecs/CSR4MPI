@@ -1,6 +1,8 @@
 # CSR4MPI
 
-一个支持分布式（按连续行块划分）与对称存储扩展的 C++17 CSR 稀疏矩阵库，集成 MPI（可选）、OpenMP（可选）、GoogleTest 单元测试与 MUMPS 导出适配。提供标量类型冷切换（float/double/complex<float>/complex<double>），含远程条目通信装配与对称矩阵的上下三角展开。
+一个支持分布式（按连续行块划分）与对称存储扩展的 C++17 CSR 稀疏矩阵库，集成 MPI（可选）、OpenMP（可选）、GoogleTest 单元测试与 MUMPS 导出适配。
+
+**核心设计：模板化多标量类型支持** —— 库已完全模板化，四种标量类型（`float`、`double`、`std::complex<float>`、`std::complex<double>`）可在同一次编译中同时使用，无需切换编译开关重新构建。提供远程条目通信装配与对称矩阵的上下三角展开。
 
 > 当前构建为静态库 `csr4mpi` + 测试可执行 `csr4mpi_tests`。
 
@@ -8,13 +10,15 @@
 
 ## 主要特性
 
+- **模板化多标量类型**：所有核心类均为 C++ 模板，支持 `float`、`double`、`std::complex<float>`、`std::complex<double>` 四种标量类型，无需重新编译即可同时使用。
+- **便利类型别名**：提供 `cCSRMatrixF`、`cCSRMatrixD`、`cCSRMatrixCF`、`cCSRMatrixCD` 等预定义别名，简化常用类型的声明。
+- **类型特征工具**：`is_complex_v<T>`、`is_supported_scalar_v<T>`、`real_type_t<T>` 等编译期类型检测和转换工具。
 - 连续行块分布：`cRowDistribution` 描述全局行到进程的映射。
-- 本地 CSR 结构：`cCSRMatrix` 保存所属行区间的行指针、列索引与数值。
-- 通信模式：`cCommPattern` 聚合跨进程目标条目 (globalRow, globalCol, value)。
-- 汇总装配：`cCSRComm::Assemble` 使用 MPI Alltoallv 交换并累加远程重复条目。
+- 本地 CSR 结构：`cCSRMatrix<Scalar>` 保存所属行区间的行指针、列索引与数值。
+- 通信模式：`cCommPattern<Scalar>` 聚合跨进程目标条目 (globalRow, globalCol, value)。
+- 汇总装配：`cCSRComm<Scalar>::Assemble` 使用 MPI Alltoallv 交换并累加远程重复条目。
 - 对称存储展开：支持下三角存储在 SpMV/SpMM 中自动补全镜像贡献（本地 + 远程）。
-- MUMPS 导出：`cMumpsAdapter` 输出 1-based COO 三元组。
-- 标量选择：`CSR4MPI_VALUE_TYPE` 控制四种标量类型（默认双精度实数）。
+- MUMPS 导出：`cMumpsAdapter<Scalar>` 输出 1-based COO 三元组。
 - Benchmark：`csr4mpi_bench_spmv` 输出平均耗时与 GFLOPs。
 
 ## 构建
@@ -24,14 +28,14 @@
 ```powershell
 mkdir build
 cd build
-cmake -G "Ninja" -DCSR4MPI_VALUE_TYPE=1 ..
+cmake -G "Ninja" ..
 cmake --build . --config Release
 ```
 
 参数说明：
 
 - `-DCSR4MPI_ENABLE_OPENMP=ON|OFF`：控制并行内核的 OpenMP 支持。
-- `-DCSR4MPI_VALUE_TYPE=0|1|2|3`：`0=float,1=double,2=complex<float>,3=complex<double>`。
+- 无需指定标量类型参数 —— 四种标量类型在同一次编译中均可使用。
 
 ## 下载示例矩阵 (Matrix Market / SuiteSparse)
 
@@ -102,6 +106,7 @@ mpiexec -n 4 .\csr4mpi_bench_spmv.exe bcsstk13.mtx 20
 
 ```powershell
 ./csr4mpi_bench_spmv.exe bcsstk13.mtx 10
+```
 
 也可使用本地合成矩阵（不依赖外部下载），通过生成器 `csr4mpi_gen_mm`：
 
@@ -112,18 +117,56 @@ mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_8k12_general.mtx 20
 mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_12k10_sym_lower.mtx 20
 ```
 
-## 标量类型切换
+## 标量类型使用
 
-通过 CMake 变量 `CSR4MPI_VALUE_TYPE`：
+库采用 C++ 模板实现多标量类型支持，四种类型在同一次编译中均可使用，无需切换编译开关：
 
-| 值 | 类型 |
-|----|------|
-| 0  | float |
-| 1  | double (默认) |
-| 2  | std::complex<float> |
-| 3  | std::complex<double> |
+### 预定义类型别名
 
-内部统一别名 `vScalar`，测试/核心代码不直接硬编码具体标量。
+| 别名 | 完整类型 |
+|------|----------|
+| `cCSRMatrixF` | `cCSRMatrix<float>` |
+| `cCSRMatrixD` | `cCSRMatrix<double>` |
+| `cCSRMatrixCF` | `cCSRMatrix<std::complex<float>>` |
+| `cCSRMatrixCD` | `cCSRMatrix<std::complex<double>>` |
+
+### 使用示例
+
+```cpp
+#include "CSRMatrix.h"
+#include "Operations.h"
+
+using namespace csr4mpi;
+
+// 所有类型在同一程序中同时可用
+cCSRMatrixD matDouble(0, n, n, rowPtr, colInd, valuesDouble);
+cCSRMatrixCF matComplexFloat(0, n, n, rowPtr, colInd, valuesComplexFloat);
+
+// SpMV 操作
+std::vector<double> xD(n, 1.0), yD;
+SpMV(matDouble, xD, yD);
+
+std::vector<std::complex<float>> xCF(n, {1.0f, 0.0f}), yCF;
+SpMV(matComplexFloat, xCF, yCF);
+
+// 也可以直接使用模板形式
+cCSRMatrix<std::complex<double>> matCD(...);
+```
+
+### 类型特征工具
+
+`Global.h` 提供以下编译期类型检测与转换工具：
+
+- `is_complex_v<T>`：判断 `T` 是否为 `std::complex<>` 类型。
+- `is_supported_scalar_v<T>`：判断 `T` 是否为支持的四种标量之一。
+- `real_type_t<T>`：获取标量的实部类型（实数类型返回自身，复数返回其分量类型）。
+
+```cpp
+static_assert(is_complex_v<std::complex<double>>);       // true
+static_assert(!is_complex_v<double>);                    // true (double is not complex)
+static_assert(is_supported_scalar_v<float>);             // true
+static_assert(std::is_same_v<real_type_t<std::complex<float>>, float>);  // true
+```
 
 ## 对称矩阵说明
 
@@ -134,14 +177,18 @@ mpiexec -n 4 .\csr4mpi_bench_spmv.exe synthetic_12k10_sym_lower.mtx 20
 
 ## 目录要点
 
-- `include/Global.h`：类型与宏定义。
-- `include/CSRMatrix.h` / `src/CSRMatrix.cpp`：CSR 本地块。
+- `include/Global.h`：类型定义、类型特征（`is_complex_v`、`is_supported_scalar_v`、`real_type_t`）与 MPI 辅助函数。
+- `include/CSRMatrix.h`：模板化 CSR 本地块 `cCSRMatrix<Scalar>` 与类型别名。
 - `include/Distribution.h` / `src/Distribution.cpp`：行分布。
-- `include/CommPattern.h` / `src/CommPattern.cpp`：远程条目通信模式。
-- `include/CSRComm.h` / `src/CSRComm.cpp`：汇总装配逻辑。
-- `include/MumpsAdapter.h` / `src/MumpsAdapter.cpp`：MUMPS 导出。
+- `include/CommPattern.h`：模板化远程条目通信模式 `cCommPattern<Scalar>`。
+- `include/CSRComm.h`：模板化汇总装配逻辑 `cCSRComm<Scalar>`。
+- `include/MumpsAdapter.h`：模板化 MUMPS 导出 `cMumpsAdapter<Scalar>`。
+- `include/Operations.h`：模板化 SpMV/SpMM 操作。
+- `include/MatrixMarketLoader.h`：模板化 Matrix Market 文件加载器。
+- `include/DistributedOps.h`：分布式 SpMV 操作。
 - `bench/bench_large_spmv.cpp`：SpMV 性能基准。
 - `tests/`：GoogleTest 单元与 MPI 分布式测试。
+- `tests/test_all_scalar_types.cpp`：针对四种标量类型的全面测试（52 个测试用例）。
 
 ## TODO
 
