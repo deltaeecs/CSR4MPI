@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(CSR4MPI LANGUAGES CXX)
 
-set(CSR4MPI_VALUE_TYPE "1" CACHE STRING "Scalar type: 0=float,1=double,2=complex<float>,3=complex<double>")
+# CSR4MPI_VALUE_TYPE is now deprecated - all types are compiled into the library.
+# This option is kept for backward compatibility but has no effect.
+set(CSR4MPI_VALUE_TYPE "1" CACHE STRING "DEPRECATED: All scalar types are now always compiled. This option has no effect.")
 option(CSR4MPI_ENABLE_BLAS "Enable optional BLAS placeholder path" OFF)
 option(CSR4MPI_ENABLE_OPENMP "Enable OpenMP parallel kernels" ON)
 

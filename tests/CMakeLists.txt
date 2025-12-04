@@ -39,10 +39,11 @@ add_executable(csr4mpi_tests
     test_matrix_market.cpp
     test_symmetric.cpp
     test_mpi_symmetric_spmm.cpp
+    test_all_scalar_types.cpp
 )
 
 target_link_libraries(csr4mpi_tests PRIVATE csr4mpi GTest::gtest_main)
-target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CSR4MPI_VALUE_TYPE=${CSR4MPI_VALUE_TYPE})
+target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 if(CSR4MPI_ENABLE_BLAS)
     target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_USE_BLAS)
 endif()
@@ -229,7 +230,7 @@ if(CSR4MPI_ENABLE_MUMPS)
         if (DEFINED CSR4MPI_MPI_LINK_TARGET)
             target_link_libraries(csr4mpi_mumps_tests PRIVATE ${CSR4MPI_MPI_LINK_TARGET})
         endif()
-        target_compile_definitions(csr4mpi_mumps_tests PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CSR4MPI_VALUE_TYPE=${CSR4MPI_VALUE_TYPE} CSR4MPI_USE_MUMPS)
+        target_compile_definitions(csr4mpi_mumps_tests PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CSR4MPI_USE_MUMPS)
         if (CSR4MPI_MUMPS_DEBUG)
             target_compile_definitions(csr4mpi_mumps_tests PRIVATE CSR4MPI_MUMPS_DEBUG)
         endif()

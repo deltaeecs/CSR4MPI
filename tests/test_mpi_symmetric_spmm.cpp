@@ -15,6 +15,7 @@
 #include <mpi.h>
 
 using namespace csr4mpi;
+using Scalar = double;
 
 // 分布式对称（下三角存储）矩阵 4x4：
 // Lower stored entries per row (owned rows only):
@@ -57,49 +58,49 @@ TEST(MpiSymmetricSpMMTest, DistributedLowerExpansionGatherMM)
     // Build CSR for owned rows only (lower triangle entries on those rows)
     std::vector<iIndex> vRowPtr;
     std::vector<iIndex> vColInd;
-    std::vector<vScalar> vValues;
+    std::vector<Scalar> vValues;
     vRowPtr.push_back(0);
     for (iIndex gRow = iGlobalRowBegin; gRow < iGlobalRowEnd; ++gRow) {
         if (gRow == 0) {
             vColInd.push_back(0);
-            vValues.push_back(static_cast<vScalar>(2));
+            vValues.push_back(static_cast<Scalar>(2));
         } else if (gRow == 1) {
             vColInd.push_back(0);
-            vValues.push_back(static_cast<vScalar>(1));
+            vValues.push_back(static_cast<Scalar>(1));
             vColInd.push_back(1);
-            vValues.push_back(static_cast<vScalar>(3));
+            vValues.push_back(static_cast<Scalar>(3));
         } else if (gRow == 2) {
             vColInd.push_back(1);
-            vValues.push_back(static_cast<vScalar>(4));
+            vValues.push_back(static_cast<Scalar>(4));
             vColInd.push_back(2);
-            vValues.push_back(static_cast<vScalar>(5));
+            vValues.push_back(static_cast<Scalar>(5));
         } else if (gRow == 3) {
             vColInd.push_back(2);
-            vValues.push_back(static_cast<vScalar>(6));
+            vValues.push_back(static_cast<Scalar>(6));
             vColInd.push_back(3);
-            vValues.push_back(static_cast<vScalar>(7));
+            vValues.push_back(static_cast<Scalar>(7));
         }
         vRowPtr.push_back(static_cast<iIndex>(vColInd.size()));
     }
-    cCSRMatrix A(iGlobalRowBegin, iGlobalRowEnd, 4, vRowPtr, vColInd, vValues, eSymmLower);
+    cCSRMatrix<Scalar> A(iGlobalRowBegin, iGlobalRowEnd, 4, vRowPtr, vColInd, vValues, eSymmLower);
     A.AttachDistribution(dist);
     // Dense X 4x2 col-major
-    std::vector<vScalar> X = { static_cast<vScalar>(1), static_cast<vScalar>(1), static_cast<vScalar>(1), static_cast<vScalar>(1),
-        static_cast<vScalar>(2), static_cast<vScalar>(3), static_cast<vScalar>(4), static_cast<vScalar>(5) };
-    std::vector<vScalar> Y;
+    std::vector<Scalar> X = { static_cast<Scalar>(1), static_cast<Scalar>(1), static_cast<Scalar>(1), static_cast<Scalar>(1),
+        static_cast<Scalar>(2), static_cast<Scalar>(3), static_cast<Scalar>(4), static_cast<Scalar>(5) };
+    std::vector<Scalar> Y;
     SpMM(A, X, 2, Y);
     ASSERT_EQ(Y.size(), static_cast<size_t>(localRows * 2));
     // Expected slices
     if (rank == 0) {
-        EXPECT_EQ(Y[0], static_cast<vScalar>(3));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(8));
-        EXPECT_EQ(Y[2], static_cast<vScalar>(7));
-        EXPECT_EQ(Y[3], static_cast<vScalar>(27));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(3));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(8));
+        EXPECT_EQ(Y[2], static_cast<Scalar>(7));
+        EXPECT_EQ(Y[3], static_cast<Scalar>(27));
     } else {
-        EXPECT_EQ(Y[0], static_cast<vScalar>(15));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(13));
-        EXPECT_EQ(Y[2], static_cast<vScalar>(62));
-        EXPECT_EQ(Y[3], static_cast<vScalar>(59));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(15));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(13));
+        EXPECT_EQ(Y[2], static_cast<Scalar>(62));
+        EXPECT_EQ(Y[3], static_cast<Scalar>(59));
     }
     int finFlag = 0;
     MPI_Finalized(&finFlag);
@@ -130,55 +131,55 @@ TEST(MpiSymmetricSpMMTest, DistributedLowerExpansionGatherMM4Proc)
     iSize localRows = iGlobalRowEnd - iGlobalRowBegin;
     std::vector<iIndex> vRowPtr;
     std::vector<iIndex> vColInd;
-    std::vector<vScalar> vValues;
+    std::vector<Scalar> vValues;
     vRowPtr.push_back(0);
     for (iIndex gRow = iGlobalRowBegin; gRow < iGlobalRowEnd; ++gRow) {
         if (gRow == 0) {
             vColInd.push_back(0);
-            vValues.push_back(static_cast<vScalar>(2));
+            vValues.push_back(static_cast<Scalar>(2));
         } else if (gRow == 1) {
             vColInd.push_back(0);
-            vValues.push_back(static_cast<vScalar>(1));
+            vValues.push_back(static_cast<Scalar>(1));
             vColInd.push_back(1);
-            vValues.push_back(static_cast<vScalar>(3));
+            vValues.push_back(static_cast<Scalar>(3));
         } else if (gRow == 2) {
             vColInd.push_back(1);
-            vValues.push_back(static_cast<vScalar>(4));
+            vValues.push_back(static_cast<Scalar>(4));
             vColInd.push_back(2);
-            vValues.push_back(static_cast<vScalar>(5));
+            vValues.push_back(static_cast<Scalar>(5));
         } else if (gRow == 3) {
             vColInd.push_back(2);
-            vValues.push_back(static_cast<vScalar>(6));
+            vValues.push_back(static_cast<Scalar>(6));
             vColInd.push_back(3);
-            vValues.push_back(static_cast<vScalar>(7));
+            vValues.push_back(static_cast<Scalar>(7));
         }
         vRowPtr.push_back(static_cast<iIndex>(vColInd.size()));
     }
-    cCSRMatrix A(iGlobalRowBegin, iGlobalRowEnd, 4, vRowPtr, vColInd, vValues, eSymmLower);
+    cCSRMatrix<Scalar> A(iGlobalRowBegin, iGlobalRowEnd, 4, vRowPtr, vColInd, vValues, eSymmLower);
     A.AttachDistribution(dist);
     // Dense X 4x2 col-major
-    std::vector<vScalar> X = { static_cast<vScalar>(1), static_cast<vScalar>(1), static_cast<vScalar>(1), static_cast<vScalar>(1),
-        static_cast<vScalar>(2), static_cast<vScalar>(3), static_cast<vScalar>(4), static_cast<vScalar>(5) };
-    std::vector<vScalar> Y;
+    std::vector<Scalar> X = { static_cast<Scalar>(1), static_cast<Scalar>(1), static_cast<Scalar>(1), static_cast<Scalar>(1),
+        static_cast<Scalar>(2), static_cast<Scalar>(3), static_cast<Scalar>(4), static_cast<Scalar>(5) };
+    std::vector<Scalar> Y;
     SpMM(A, X, 2, Y);
     ASSERT_EQ(Y.size(), static_cast<size_t>(localRows * 2));
     // Expected per-rank slice
     switch (rank) {
     case 0:
-        EXPECT_EQ(Y[0], static_cast<vScalar>(3));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(7));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(3));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(7));
         break;
     case 1:
-        EXPECT_EQ(Y[0], static_cast<vScalar>(8));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(27));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(8));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(27));
         break;
     case 2:
-        EXPECT_EQ(Y[0], static_cast<vScalar>(15));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(62));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(15));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(62));
         break;
     case 3:
-        EXPECT_EQ(Y[0], static_cast<vScalar>(13));
-        EXPECT_EQ(Y[1], static_cast<vScalar>(59));
+        EXPECT_EQ(Y[0], static_cast<Scalar>(13));
+        EXPECT_EQ(Y[1], static_cast<Scalar>(59));
         break;
     }
     int finFlag = 0;
