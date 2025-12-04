@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <complex>
 #include <type_traits>
+#include <mpi.h>
 
 namespace csr4mpi {
 enum eValueType {
@@ -55,5 +56,38 @@ struct is_supported_scalar : std::bool_constant<
 
 template <typename T>
 inline constexpr bool is_supported_scalar_v = is_supported_scalar<T>::value;
+
+namespace mpi_helper {
+    // Helper to get MPI datatype for a scalar type
+    // pCreatedType is set if a custom MPI type was created (caller must free it)
+    template <typename Scalar>
+    inline MPI_Datatype GetMPIDatatype(MPI_Datatype* pCreatedType = nullptr) {
+        if constexpr (std::is_same_v<Scalar, float>) {
+            return MPI_FLOAT;
+        } else if constexpr (std::is_same_v<Scalar, double>) {
+            return MPI_DOUBLE;
+        } else if constexpr (std::is_same_v<Scalar, std::complex<float>>) {
+#ifdef MPI_C_FLOAT_COMPLEX
+            return MPI_C_FLOAT_COMPLEX;
+#else
+            MPI_Datatype dt;
+            MPI_Type_contiguous(2, MPI_FLOAT, &dt);
+            MPI_Type_commit(&dt);
+            if (pCreatedType) *pCreatedType = dt;
+            return dt;
+#endif
+        } else if constexpr (std::is_same_v<Scalar, std::complex<double>>) {
+#ifdef MPI_C_DOUBLE_COMPLEX
+            return MPI_C_DOUBLE_COMPLEX;
+#else
+            MPI_Datatype dt;
+            MPI_Type_contiguous(2, MPI_DOUBLE, &dt);
+            MPI_Type_commit(&dt);
+            if (pCreatedType) *pCreatedType = dt;
+            return dt;
+#endif
+        }
+    }
+}
 
 }

@@ -12,38 +12,6 @@
 
 namespace csr4mpi {
 
-namespace detail {
-    // Helper to get MPI datatype for a scalar type (defined in CSRComm.h too, but we redefine for independence)
-    template <typename Scalar>
-    inline MPI_Datatype GetMPIDatatype(MPI_Datatype* pCreatedType = nullptr) {
-        if constexpr (std::is_same_v<Scalar, float>) {
-            return MPI_FLOAT;
-        } else if constexpr (std::is_same_v<Scalar, double>) {
-            return MPI_DOUBLE;
-        } else if constexpr (std::is_same_v<Scalar, std::complex<float>>) {
-#ifdef MPI_C_FLOAT_COMPLEX
-            return MPI_C_FLOAT_COMPLEX;
-#else
-            MPI_Datatype dt;
-            MPI_Type_contiguous(2, MPI_FLOAT, &dt);
-            MPI_Type_commit(&dt);
-            if (pCreatedType) *pCreatedType = dt;
-            return dt;
-#endif
-        } else if constexpr (std::is_same_v<Scalar, std::complex<double>>) {
-#ifdef MPI_C_DOUBLE_COMPLEX
-            return MPI_C_DOUBLE_COMPLEX;
-#else
-            MPI_Datatype dt;
-            MPI_Type_contiguous(2, MPI_DOUBLE, &dt);
-            MPI_Type_commit(&dt);
-            if (pCreatedType) *pCreatedType = dt;
-            return dt;
-#endif
-        }
-    }
-}
-
 template <typename Scalar>
 void SpMV(const cCSRMatrix<Scalar>& A, const std::vector<Scalar>& x, std::vector<Scalar>& y)
 {
@@ -84,7 +52,7 @@ void SpMV(const cCSRMatrix<Scalar>& A, const std::vector<Scalar>& x, std::vector
         for (int r = 1; r < worldSize; ++r)
             displs[r] = displs[r - 1] + counts[r - 1];
         MPI_Datatype tCreatedType = MPI_DATATYPE_NULL;
-        MPI_Datatype dt = detail::GetMPIDatatype<Scalar>(&tCreatedType);
+        MPI_Datatype dt = mpi_helper::GetMPIDatatype<Scalar>(&tCreatedType);
         MPI_Allgatherv(x.data(), counts[rank], dt, xGlobalBuf.data(), counts.data(), displs.data(), dt, MPI_COMM_WORLD);
         if (tCreatedType != MPI_DATATYPE_NULL) {
             MPI_Type_free(&tCreatedType);
@@ -231,7 +199,7 @@ void SpMV(const cCSRMatrix<Scalar>& A, const std::vector<Scalar>& x, std::vector
             disp[1] -= base;
             MPI_Datatype types[2];
             types[0] = MPI_LONG_LONG;
-            types[1] = detail::GetMPIDatatype<Scalar>(&tCreatedScalarType);
+            types[1] = mpi_helper::GetMPIDatatype<Scalar>(&tCreatedScalarType);
             MPI_Type_create_struct(2, bl, disp, types, &tPairType);
             MPI_Type_commit(&tPairType);
         }
@@ -447,7 +415,7 @@ void SpMM(const cCSRMatrix<Scalar>& A, const std::vector<Scalar>& X, iSize nCols
         }
         std::vector<Scalar> recvValsList(static_cast<size_t>(totalRecv) * static_cast<size_t>(nCols));
         MPI_Datatype tCreatedScalarType = MPI_DATATYPE_NULL;
-        MPI_Datatype scalarType = detail::GetMPIDatatype<Scalar>(&tCreatedScalarType);
+        MPI_Datatype scalarType = mpi_helper::GetMPIDatatype<Scalar>(&tCreatedScalarType);
         MPI_Alltoallv(sendValsList.data(), sendValCounts.data(), sendValDispls.data(), scalarType,
             recvValsList.data(), recvValCounts.data(), recvValDispls.data(), scalarType,
             MPI_COMM_WORLD);

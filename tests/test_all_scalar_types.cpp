@@ -38,11 +38,8 @@ protected:
 
     // Helper function to check approximate equality for floating-point and complex types
     static bool ApproxEqual(Scalar a, Scalar b, double tolerance = 1e-10) {
-        if constexpr (is_complex_v<Scalar>) {
-            return std::abs(a - b) < tolerance;
-        } else {
-            return std::abs(a - b) < tolerance;
-        }
+        // std::abs works for both real and complex types
+        return std::abs(a - b) < tolerance;
     }
 };
 

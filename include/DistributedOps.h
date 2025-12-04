@@ -49,7 +49,7 @@ void DistributedSpMV(const cCSRMatrix<Scalar>& A, const cRowDistribution& dist,
             displs[r] = displs[r - 1] + recvCounts[r - 1];
         xGlobal.resize(static_cast<size_t>(globalCols));
         MPI_Datatype tCreatedType = MPI_DATATYPE_NULL;
-        MPI_Datatype dt = detail::GetMPIDatatype<Scalar>(&tCreatedType);
+        MPI_Datatype dt = mpi_helper::GetMPIDatatype<Scalar>(&tCreatedType);
         MPI_Allgatherv(xLocalOrGlobal.data(), recvCounts[worldRank], dt,
             xGlobal.data(), recvCounts.data(), displs.data(), dt, comm);
         if (tCreatedType != MPI_DATATYPE_NULL) {
