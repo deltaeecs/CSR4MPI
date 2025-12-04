@@ -7,12 +7,13 @@ set(SRC_LIST
     Operations.cpp
     BlasAdapter.cpp
     MatrixMarketLoader.cpp
+    DistributedOps.cpp
 )
 
 add_library(csr4mpi STATIC ${SRC_LIST})
 target_include_directories(csr4mpi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-target_compile_definitions(csr4mpi PUBLIC CSR4MPI_VALUE_TYPE=${CSR4MPI_VALUE_TYPE})
+# CSR4MPI_VALUE_TYPE is no longer needed - all types are templated and compiled into headers
 if(CSR4MPI_ENABLE_BLAS)
     target_compile_definitions(csr4mpi PUBLIC CSR4MPI_USE_BLAS)
 endif()

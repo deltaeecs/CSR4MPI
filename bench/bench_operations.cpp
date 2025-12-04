@@ -6,8 +6,9 @@
 #include <vector>
 
 using namespace csr4mpi;
+using Scalar = double;
 
-static cCSRMatrix BuildRandomUniform(iSize rows, iSize cols, iSize nnzPerRow, unsigned seed)
+static cCSRMatrix<Scalar> BuildRandomUniform(iSize rows, iSize cols, iSize nnzPerRow, unsigned seed)
 {
     std::mt19937_64 gen(seed);
     std::uniform_int_distribution<iSize> colDist(0, cols - 1);
@@ -15,7 +16,7 @@ static cCSRMatrix BuildRandomUniform(iSize rows, iSize cols, iSize nnzPerRow, un
     std::vector<iIndex> vRowPtr(rows + 1, 0);
     std::vector<iIndex> vColInd;
     vColInd.reserve(rows * nnzPerRow);
-    std::vector<vScalar> vValues;
+    std::vector<Scalar> vValues;
     vValues.reserve(rows * nnzPerRow);
     for (iSize r = 0; r < rows; ++r) {
         std::vector<iSize> colsChosen;
@@ -36,11 +37,11 @@ static cCSRMatrix BuildRandomUniform(iSize rows, iSize cols, iSize nnzPerRow, un
         for (auto c : colsChosen) {
             vColInd.push_back(static_cast<iIndex>(c));
             double rv = valDist(gen);
-            vValues.push_back(static_cast<vScalar>(rv));
+            vValues.push_back(static_cast<Scalar>(rv));
         }
         vRowPtr[static_cast<size_t>(r + 1)] = static_cast<iIndex>(vColInd.size());
     }
-    return cCSRMatrix(0, rows, cols, vRowPtr, vColInd, vValues);
+    return cCSRMatrix<Scalar>(0, rows, cols, vRowPtr, vColInd, vValues);
 }
 
 int main(int argc, char** argv)
@@ -62,12 +63,12 @@ int main(int argc, char** argv)
         repeats = std::stoi(argv[5]);
 
     auto A = BuildRandomUniform(rows, cols, nnzPerRow, 42);
-    std::vector<vScalar> x(static_cast<size_t>(cols));
+    std::vector<Scalar> x(static_cast<size_t>(cols));
     for (size_t i = 0; i < x.size(); ++i)
-        x[i] = static_cast<vScalar>(1);
+        x[i] = static_cast<Scalar>(1);
 
     // SpMV benchmark
-    std::vector<vScalar> y;
+    std::vector<Scalar> y;
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int r = 0; r < repeats; ++r) {
         SpMV(A, x, y);
@@ -76,10 +77,10 @@ int main(int argc, char** argv)
     std::chrono::duration<double> dtSpMV = t1 - t0;
 
     // SpMM benchmark
-    std::vector<vScalar> X(static_cast<size_t>(cols * spmmCols));
+    std::vector<Scalar> X(static_cast<size_t>(cols * spmmCols));
     for (size_t i = 0; i < X.size(); ++i)
-        X[i] = static_cast<vScalar>(1);
-    std::vector<vScalar> Y;
+        X[i] = static_cast<Scalar>(1);
+    std::vector<Scalar> Y;
     auto t2 = std::chrono::high_resolution_clock::now();
     for (int r = 0; r < repeats; ++r) {
         SpMM(A, X, spmmCols, Y);

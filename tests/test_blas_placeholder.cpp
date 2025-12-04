@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 using namespace csr4mpi;
+using Scalar = double;
 
 TEST(TestBlasPlaceholder, FlagReflectsOption)
 {
@@ -20,12 +21,12 @@ TEST(TestBlasPlaceholder, SpMMBlasMatchesSpMM)
     iSize rBegin = 0, rEnd = 3, cCount = 4;
     std::vector<iIndex> rowPtr = { 0, 2, 3, 5 };
     std::vector<iIndex> colInd = { 0, 2, 1, 1, 3 };
-    std::vector<vScalar> values = { 1, 2, 3, 4, 5 };
-    cCSRMatrix A(rBegin, rEnd, cCount, rowPtr, colInd, values);
+    std::vector<Scalar> values = { 1, 2, 3, 4, 5 };
+    cCSRMatrix<Scalar> A(rBegin, rEnd, cCount, rowPtr, colInd, values);
     iSize nCols = 2;
     // Dense RHS (4x2): columns {1,2,3,4} and {5,6,7,8}
-    std::vector<vScalar> X = { 1, 2, 3, 4, 5, 6, 7, 8 };
-    std::vector<vScalar> Y1, Y2;
+    std::vector<Scalar> X = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    std::vector<Scalar> Y1, Y2;
     SpMM(A, X, nCols, Y1);
     SpMMBlas(A, X, nCols, Y2);
     ASSERT_EQ(Y1.size(), Y2.size());

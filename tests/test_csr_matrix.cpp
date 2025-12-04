@@ -6,6 +6,9 @@
 
 using namespace csr4mpi;
 
+// Test with double as the default scalar type
+using Scalar = double;
+
 TEST(CSRMatrixTest, BasicConstruction)
 {
     std::vector<iIndex> vRowPtr;
@@ -18,12 +21,12 @@ TEST(CSRMatrixTest, BasicConstruction)
     vColInd.push_back(2);
     vColInd.push_back(1);
 
-    std::vector<vScalar> vValues;
-    vValues.push_back(static_cast<vScalar>(1.0));
-    vValues.push_back(static_cast<vScalar>(2.0));
-    vValues.push_back(static_cast<vScalar>(3.0));
+    std::vector<Scalar> vValues;
+    vValues.push_back(static_cast<Scalar>(1.0));
+    vValues.push_back(static_cast<Scalar>(2.0));
+    vValues.push_back(static_cast<Scalar>(3.0));
 
-    cCSRMatrix cLocal(0, 2, 3, vRowPtr, vColInd, vValues);
+    cCSRMatrix<Scalar> cLocal(0, 2, 3, vRowPtr, vColInd, vValues);
 
     EXPECT_EQ(cLocal.iGlobalRowBegin(), 0);
     EXPECT_EQ(cLocal.iGlobalRowEnd(), 2);
@@ -43,40 +46,40 @@ TEST(CSRCommTest, LocalAssembleNoMPI)
     vColInd.push_back(0);
     vColInd.push_back(1);
 
-    std::vector<vScalar> vValues;
-    vValues.push_back(static_cast<vScalar>(1.0));
-    vValues.push_back(static_cast<vScalar>(2.0));
+    std::vector<Scalar> vValues;
+    vValues.push_back(static_cast<Scalar>(1.0));
+    vValues.push_back(static_cast<Scalar>(2.0));
 
-    cCSRMatrix cLocal(0, 2, 2, vRowPtr, vColInd, vValues);
+    cCSRMatrix<Scalar> cLocal(0, 2, 2, vRowPtr, vColInd, vValues);
 
     cRowDistribution cDist = cRowDistribution::CreateBlockDistribution(2, 1, 0);
 
-    std::vector<cRemoteEntry> vEntries;
-    cRemoteEntry cEntry0;
+    std::vector<cRemoteEntry<Scalar>> vEntries;
+    cRemoteEntry<Scalar> cEntry0;
     cEntry0.m_iGlobalRow = 0;
     cEntry0.m_iGlobalCol = 0;
-    cEntry0.m_vValue = static_cast<vScalar>(3.0);
+    cEntry0.m_vValue = static_cast<Scalar>(3.0);
     vEntries.push_back(cEntry0);
 
-    cRemoteEntry cEntry1;
+    cRemoteEntry<Scalar> cEntry1;
     cEntry1.m_iGlobalRow = 1;
     cEntry1.m_iGlobalCol = 1;
-    cEntry1.m_vValue = static_cast<vScalar>(4.0);
+    cEntry1.m_vValue = static_cast<Scalar>(4.0);
     vEntries.push_back(cEntry1);
 
-    cCommPattern cPattern;
+    cCommPattern<Scalar> cPattern;
     cPattern.Build(vEntries, cDist, 0, 1);
 
-    std::vector<vScalar> vContrib;
-    vContrib.push_back(static_cast<vScalar>(3.0));
-    vContrib.push_back(static_cast<vScalar>(4.0));
+    std::vector<Scalar> vContrib;
+    vContrib.push_back(static_cast<Scalar>(3.0));
+    vContrib.push_back(static_cast<Scalar>(4.0));
 
     MPI_Init(nullptr, nullptr);
-    cCSRComm::Assemble(cLocal, cPattern, vContrib, MPI_COMM_WORLD);
+    cCSRComm<Scalar>::Assemble(cLocal, cPattern, vContrib, MPI_COMM_WORLD);
     MPI_Finalize();
 
-    const std::vector<vScalar>& vNewValues = cLocal.vValues();
+    const std::vector<Scalar>& vNewValues = cLocal.vValues();
 
-    EXPECT_EQ(vNewValues[0], static_cast<vScalar>(4.0));
-    EXPECT_EQ(vNewValues[1], static_cast<vScalar>(6.0));
+    EXPECT_EQ(vNewValues[0], static_cast<Scalar>(4.0));
+    EXPECT_EQ(vNewValues[1], static_cast<Scalar>(6.0));
 }

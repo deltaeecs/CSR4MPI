@@ -9,8 +9,9 @@
 #include <vector>
 
 using namespace csr4mpi;
+using Scalar = double;
 
-static cCSRMatrix ExtractLocal(const cCSRMatrix& full, const cRowDistribution& dist)
+static cCSRMatrix<Scalar> ExtractLocal(const cCSRMatrix<Scalar>& full, const cRowDistribution& dist)
 {
     iIndex rBeg = dist.iGlobalRowBegin();
     iIndex rEnd = dist.iGlobalRowEnd();
@@ -20,7 +21,7 @@ static cCSRMatrix ExtractLocal(const cCSRMatrix& full, const cRowDistribution& d
     const auto& FV = full.vValues();
     std::vector<iIndex> lRP(localRows + 1, 0);
     std::vector<iIndex> lC;
-    std::vector<vScalar> lV;
+    std::vector<Scalar> lV;
     for (iSize lr = 0; lr < localRows; ++lr) {
         iIndex g = rBeg + lr;
         for (iIndex k = FRP[(size_t)g]; k < FRP[(size_t)g + 1]; ++k) {
@@ -29,7 +30,7 @@ static cCSRMatrix ExtractLocal(const cCSRMatrix& full, const cRowDistribution& d
         }
         lRP[(size_t)lr + 1] = (iIndex)lC.size();
     }
-    cCSRMatrix local(rBeg, rEnd, full.iGlobalColCount(), lRP, lC, lV, full.eSymmetry());
+    cCSRMatrix<Scalar> local(rBeg, rEnd, full.iGlobalColCount(), lRP, lC, lV, full.eSymmetry());
     local.AttachDistribution(std::make_shared<cRowDistribution>(dist));
     return local;
 }
@@ -43,25 +44,25 @@ int main(int argc, char** argv)
     std::string matrixFile = (argc > 1 ? argv[1] : "bcsstk13.mtx");
     std::string path = std::string(CSR4MPI_SOURCE_DIR) + "/tests/data/" + matrixFile;
     std::vector<iIndex> gRP, gCI;
-    std::vector<vScalar> gV;
+    std::vector<Scalar> gV;
     iIndex gRows = 0, gCols = 0;
-    if (!LoadMatrixMarket(path, gRP, gCI, gV, gRows, gCols)) {
+    if (!LoadMatrixMarket<Scalar>(path, gRP, gCI, gV, gRows, gCols)) {
         if (rank == 0)
             std::cout << "Matrix not found: " << path << "\n";
         MPI_Finalize();
         return 0;
     }
     auto dist = cRowDistribution::CreateBlockDistribution(gRows, worldSize, rank);
-    cCSRMatrix local = ExtractLocal(cCSRMatrix(0, gRows, gCols, gRP, gCI, gV), dist);
+    cCSRMatrix<Scalar> local = ExtractLocal(cCSRMatrix<Scalar>(0, gRows, gCols, gRP, gCI, gV), dist);
     // Build local slice of x (random deterministic)
     const auto& offs = dist.vRowOffsets();
     iIndex cBeg = offs[(size_t)rank];
     iIndex cEnd = offs[(size_t)rank + 1];
-    std::vector<vScalar> xLocal;
+    std::vector<Scalar> xLocal;
     xLocal.reserve(static_cast<size_t>(cEnd - cBeg));
     for (iIndex g = cBeg; g < cEnd; ++g)
-        xLocal.push_back(static_cast<vScalar>(1));
-    std::vector<vScalar> yLocal;
+        xLocal.push_back(static_cast<Scalar>(1));
+    std::vector<Scalar> yLocal;
     int iters = (argc > 2 ? std::stoi(argv[2]) : 10);
     MPI_Barrier(MPI_COMM_WORLD);
     double t0 = MPI_Wtime();
