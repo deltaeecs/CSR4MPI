@@ -1,5 +1,0 @@
-if(EXISTS "/home/runner/work/CSR4MPI/CSR4MPI/_codeql_build_dir/tests/csr4mpi_tests[1]_tests.cmake")
-  include("/home/runner/work/CSR4MPI/CSR4MPI/_codeql_build_dir/tests/csr4mpi_tests[1]_tests.cmake")
-else()
-  add_test(csr4mpi_tests_NOT_BUILT csr4mpi_tests_NOT_BUILT)
-endif()
