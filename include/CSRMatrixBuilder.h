@@ -74,8 +74,11 @@ public:
         struct cKeyHash {
             std::size_t operator()(const cKey& k) const noexcept
             {
-                // Use a better hash function for 64-bit integers
-                return std::hash<iIndex>()(k.r) ^ (std::hash<iIndex>()(k.c) << 1);
+                // Use a robust hash combining function to reduce collisions
+                // Based on boost::hash_combine algorithm
+                std::size_t seed = std::hash<iIndex>()(k.r);
+                seed ^= std::hash<iIndex>()(k.c) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+                return seed;
             }
         };
 

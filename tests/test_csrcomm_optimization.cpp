@@ -13,6 +13,11 @@ using Scalar = double;
 // Test that the binary search optimization correctly finds elements
 TEST(CSRCommOptimizationTest, BinarySearchFindsFirstColumn)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with multiple columns per row
     std::vector<iIndex> rowPtr = { 0, 5 };  // One row with 5 elements
     std::vector<iIndex> colInd = { 0, 10, 20, 30, 40 };  // Sorted columns
@@ -34,9 +39,7 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsFirstColumn)
 
     std::vector<Scalar> contrib = { 10.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[0], 11.0);  // 1.0 + 10.0
@@ -45,6 +48,11 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsFirstColumn)
 
 TEST(CSRCommOptimizationTest, BinarySearchFindsLastColumn)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with multiple columns per row
     std::vector<iIndex> rowPtr = { 0, 5 };
     std::vector<iIndex> colInd = { 0, 10, 20, 30, 40 };
@@ -66,9 +74,7 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsLastColumn)
 
     std::vector<Scalar> contrib = { 20.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[4], 25.0);  // 5.0 + 20.0
@@ -77,6 +83,11 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsLastColumn)
 
 TEST(CSRCommOptimizationTest, BinarySearchFindsMiddleColumn)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with multiple columns per row
     std::vector<iIndex> rowPtr = { 0, 5 };
     std::vector<iIndex> colInd = { 0, 10, 20, 30, 40 };
@@ -98,9 +109,7 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsMiddleColumn)
 
     std::vector<Scalar> contrib = { 30.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[2], 33.0);  // 3.0 + 30.0
@@ -110,6 +119,11 @@ TEST(CSRCommOptimizationTest, BinarySearchFindsMiddleColumn)
 
 TEST(CSRCommOptimizationTest, BinarySearchMultipleRows)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with 3 rows, each with different number of columns
     std::vector<iIndex> rowPtr = { 0, 2, 5, 7 };
     std::vector<iIndex> colInd = { 0, 5, 1, 3, 7, 2, 9 };
@@ -145,9 +159,7 @@ TEST(CSRCommOptimizationTest, BinarySearchMultipleRows)
 
     std::vector<Scalar> contrib = { 10.0, 20.0, 30.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[1], 12.0);  // Row 0, col 5: 2.0 + 10.0
@@ -157,6 +169,11 @@ TEST(CSRCommOptimizationTest, BinarySearchMultipleRows)
 
 TEST(CSRCommOptimizationTest, LargeRowBinarySearchEfficiency)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Test with a large row to ensure binary search is used (O(log n) vs O(n))
     const int numCols = 1000;
     std::vector<iIndex> rowPtr = { 0, numCols };
@@ -184,9 +201,7 @@ TEST(CSRCommOptimizationTest, LargeRowBinarySearchEfficiency)
 
     std::vector<Scalar> contrib = { 999.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[999], 1999.0);  // 1000.0 + 999.0
@@ -194,6 +209,11 @@ TEST(CSRCommOptimizationTest, LargeRowBinarySearchEfficiency)
 
 TEST(CSRCommOptimizationTest, MultipleDuplicateAccumulations)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with sorted columns
     std::vector<iIndex> rowPtr = { 0, 3, 6 };
     std::vector<iIndex> colInd = { 0, 5, 10, 1, 6, 11 };
@@ -217,9 +237,7 @@ TEST(CSRCommOptimizationTest, MultipleDuplicateAccumulations)
 
     std::vector<Scalar> contrib(5, 10.0);
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[1], 52.0);  // 2.0 + 5*10.0
@@ -227,6 +245,11 @@ TEST(CSRCommOptimizationTest, MultipleDuplicateAccumulations)
 
 TEST(CSRCommOptimizationTest, EmptyRow)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with an empty row
     std::vector<iIndex> rowPtr = { 0, 0, 3 };  // Row 0 is empty
     std::vector<iIndex> colInd = { 1, 5, 8 };
@@ -248,9 +271,7 @@ TEST(CSRCommOptimizationTest, EmptyRow)
 
     std::vector<Scalar> contrib = { 100.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     EXPECT_DOUBLE_EQ(vals[1], 102.0);  // 2.0 + 100.0
@@ -258,6 +279,11 @@ TEST(CSRCommOptimizationTest, EmptyRow)
 
 TEST(CSRCommOptimizationTest, NonExistentColumnIgnored)
 {
+    int initFlag = 0;
+    MPI_Initialized(&initFlag);
+    if (!initFlag)
+        MPI_Init(nullptr, nullptr);
+    
     // Matrix with specific columns
     std::vector<iIndex> rowPtr = { 0, 3 };
     std::vector<iIndex> colInd = { 0, 5, 10 };
@@ -279,9 +305,7 @@ TEST(CSRCommOptimizationTest, NonExistentColumnIgnored)
 
     std::vector<Scalar> contrib = { 100.0 };
 
-    MPI_Init(nullptr, nullptr);
     cCSRComm<Scalar>::Assemble(local, pattern, contrib, MPI_COMM_WORLD);
-    MPI_Finalize();
 
     const auto& vals = local.vValues();
     // Values should remain unchanged
