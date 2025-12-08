@@ -359,3 +359,93 @@ TEST(CSRBuilderTest, ComplexScalar)
     EXPECT_DOUBLE_EQ(matrix.vValues()[0].real(), 4.0);
     EXPECT_DOUBLE_EQ(matrix.vValues()[0].imag(), 6.0);
 }
+
+TEST(CSRBuilderTest, ConvenienceFunctionBuildFromTriplets)
+{
+    std::vector<cTriplet<Scalar>> triplets;
+    triplets.push_back(cTriplet<Scalar>(0, 0, 1.0));
+    triplets.push_back(cTriplet<Scalar>(0, 1, 2.0));
+    triplets.push_back(cTriplet<Scalar>(1, 1, 3.0));
+    
+    auto matrix = BuildCSRFromTriplets(triplets, 0, 2, 2);
+    
+    EXPECT_EQ(matrix.vColInd().size(), 3u);
+    EXPECT_EQ(matrix.vValues().size(), 3u);
+    
+    const auto& values = matrix.vValues();
+    EXPECT_DOUBLE_EQ(values[0], 1.0);
+    EXPECT_DOUBLE_EQ(values[1], 2.0);
+    EXPECT_DOUBLE_EQ(values[2], 3.0);
+}
+
+TEST(CSRBuilderTest, ValidateCorrectMatrix)
+{
+    cCSRMatrixBuilder<Scalar> builder;
+    builder.AddEntry(0, 0, 1.0);
+    builder.AddEntry(0, 1, 2.0);
+    builder.AddEntry(1, 1, 3.0);
+    
+    auto matrix = builder.Build(0, 2, 2);
+    
+    std::string errorMsg;
+    EXPECT_TRUE(ValidateCSRMatrix(matrix, &errorMsg)) << errorMsg;
+}
+
+TEST(CSRBuilderTest, ValidateDetectsInvalidRowPtrSize)
+{
+    // Manually create invalid matrix
+    std::vector<iIndex> rowPtr = { 0, 1 }; // Should be size 3 for 2 rows
+    std::vector<iIndex> colInd = { 0 };
+    std::vector<Scalar> values = { 1.0 };
+    
+    cCSRMatrix<Scalar> matrix(0, 2, 2, rowPtr, colInd, values);
+    
+    std::string errorMsg;
+    EXPECT_FALSE(ValidateCSRMatrix(matrix, &errorMsg));
+    EXPECT_EQ(errorMsg, "Row pointer size mismatch");
+}
+
+TEST(CSRBuilderTest, ValidateDetectsUnsortedColumns)
+{
+    // Manually create matrix with unsorted columns
+    std::vector<iIndex> rowPtr = { 0, 2 };
+    std::vector<iIndex> colInd = { 1, 0 }; // Unsorted!
+    std::vector<Scalar> values = { 1.0, 2.0 };
+    
+    cCSRMatrix<Scalar> matrix(0, 1, 2, rowPtr, colInd, values);
+    
+    std::string errorMsg;
+    EXPECT_FALSE(ValidateCSRMatrix(matrix, &errorMsg));
+    EXPECT_EQ(errorMsg, "Column indices are not sorted within row");
+}
+
+TEST(CSRBuilderTest, ValidateDetectsColumnOutOfBounds)
+{
+    // Manually create matrix with out-of-bounds column
+    std::vector<iIndex> rowPtr = { 0, 1 };
+    std::vector<iIndex> colInd = { 10 }; // Out of bounds for colCount=2
+    std::vector<Scalar> values = { 1.0 };
+    
+    cCSRMatrix<Scalar> matrix(0, 1, 2, rowPtr, colInd, values);
+    
+    std::string errorMsg;
+    EXPECT_FALSE(ValidateCSRMatrix(matrix, &errorMsg));
+    EXPECT_EQ(errorMsg, "Column index out of bounds");
+}
+
+TEST(CSRBuilderTest, BuiltMatrixAlwaysValid)
+{
+    // Any matrix built with the builder should be valid
+    cCSRMatrixBuilder<Scalar> builder;
+    
+    // Add random entries
+    builder.AddEntry(5, 3, 1.0);
+    builder.AddEntry(2, 7, 2.0);
+    builder.AddEntry(8, 1, 3.0);
+    builder.AddEntry(0, 9, 4.0);
+    builder.AddEntry(2, 7, 5.0); // duplicate
+    
+    auto matrix = builder.Build(0, 10, 10);
+    
+    EXPECT_TRUE(ValidateCSRMatrix(matrix));
+}

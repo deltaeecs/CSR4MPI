@@ -32,6 +32,7 @@ endif()
 add_executable(csr4mpi_tests
     test_csr_matrix.cpp
     test_csr_builder.cpp
+    test_csrcomm_optimization.cpp
     test_distribution_pattern.cpp
     test_mumps_adapter.cpp
     test_operations.cpp

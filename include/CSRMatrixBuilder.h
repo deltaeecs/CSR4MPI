@@ -158,4 +158,85 @@ using cCSRMatrixBuilderD = cCSRMatrixBuilder<double>;
 using cCSRMatrixBuilderCF = cCSRMatrixBuilder<std::complex<float>>;
 using cCSRMatrixBuilderCD = cCSRMatrixBuilder<std::complex<double>>;
 
+// Convenience function to build CSR matrix directly from triplets
+template <typename Scalar>
+cCSRMatrix<Scalar> BuildCSRFromTriplets(
+    const std::vector<cTriplet<Scalar>>& vTriplets,
+    iSize iGlobalRowBegin,
+    iSize iGlobalRowEnd,
+    iSize iGlobalColCount,
+    bool bAccumulateDuplicates = true)
+{
+    cCSRMatrixBuilder<Scalar> builder;
+    builder.AddEntries(vTriplets);
+    return builder.Build(iGlobalRowBegin, iGlobalRowEnd, iGlobalColCount, bAccumulateDuplicates);
+}
+
+// Validation function to check if CSR matrix structure is valid
+template <typename Scalar>
+bool ValidateCSRMatrix(const cCSRMatrix<Scalar>& matrix, std::string* pErrorMsg = nullptr)
+{
+    const auto& rowPtr = matrix.vRowPtr();
+    const auto& colInd = matrix.vColInd();
+    const auto& values = matrix.vValues();
+    
+    iSize localRows = matrix.iGlobalRowEnd() - matrix.iGlobalRowBegin();
+    
+    // Check row pointer size
+    if (rowPtr.size() != static_cast<std::size_t>(localRows + 1)) {
+        if (pErrorMsg) *pErrorMsg = "Row pointer size mismatch";
+        return false;
+    }
+    
+    // Check row pointers are non-decreasing
+    for (iSize i = 0; i < localRows; ++i) {
+        if (rowPtr[static_cast<std::size_t>(i)] > rowPtr[static_cast<std::size_t>(i + 1)]) {
+            if (pErrorMsg) *pErrorMsg = "Row pointers are not non-decreasing";
+            return false;
+        }
+    }
+    
+    // Check first row pointer is 0
+    if (rowPtr[0] != 0) {
+        if (pErrorMsg) *pErrorMsg = "First row pointer is not 0";
+        return false;
+    }
+    
+    // Check last row pointer matches number of non-zeros
+    if (rowPtr[static_cast<std::size_t>(localRows)] != static_cast<iIndex>(colInd.size())) {
+        if (pErrorMsg) *pErrorMsg = "Last row pointer does not match column index size";
+        return false;
+    }
+    
+    // Check column indices and values have same size
+    if (colInd.size() != values.size()) {
+        if (pErrorMsg) *pErrorMsg = "Column index and value array size mismatch";
+        return false;
+    }
+    
+    // Check column indices are sorted within each row and within bounds
+    for (iSize r = 0; r < localRows; ++r) {
+        iIndex start = rowPtr[static_cast<std::size_t>(r)];
+        iIndex end = rowPtr[static_cast<std::size_t>(r + 1)];
+        
+        for (iIndex k = start; k < end; ++k) {
+            iIndex col = colInd[static_cast<std::size_t>(k)];
+            
+            // Check column is within bounds
+            if (col < 0 || col >= matrix.iGlobalColCount()) {
+                if (pErrorMsg) *pErrorMsg = "Column index out of bounds";
+                return false;
+            }
+            
+            // Check columns are sorted within row
+            if (k > start && colInd[static_cast<std::size_t>(k - 1)] >= col) {
+                if (pErrorMsg) *pErrorMsg = "Column indices are not sorted within row";
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
 }
