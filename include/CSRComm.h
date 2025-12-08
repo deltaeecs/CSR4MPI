@@ -3,6 +3,7 @@
 #include "Global.h"
 #include "CSRMatrix.h"
 #include "CommPattern.h"
+#include <algorithm>
 #include <mpi.h>
 #include <vector>
 
@@ -136,6 +137,7 @@ public:
         }
 
         // Accumulate received contributions into local CSR matrix.
+        // Use binary search for better performance (O(log n) instead of O(n) per lookup)
         for (const cTriplet& cT : vRecvBuf) {
             iIndex iGlobalRow = cT.m_iRow;
             iIndex iGlobalCol = cT.m_iCol;
@@ -144,11 +146,14 @@ public:
             iIndex iStart = vRowPtr[static_cast<std::size_t>(iLocalRow)];
             iIndex iEnd = vRowPtr[static_cast<std::size_t>(iLocalRow + 1)];
 
-            for (iIndex i = iStart; i < iEnd; ++i) {
-                if (vColInd[static_cast<std::size_t>(i)] == iGlobalCol) {
-                    vLocalVal[static_cast<std::size_t>(i)] += cT.m_vVal;
-                    break;
-                }
+            // Binary search within the row's column indices
+            auto itBegin = vColInd.begin() + iStart;
+            auto itEnd = vColInd.begin() + iEnd;
+            auto it = std::lower_bound(itBegin, itEnd, iGlobalCol);
+            
+            if (it != itEnd && *it == iGlobalCol) {
+                std::size_t idx = static_cast<std::size_t>(it - vColInd.begin());
+                vLocalVal[idx] += cT.m_vVal;
             }
         }
     }
