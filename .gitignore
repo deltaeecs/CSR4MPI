@@ -54,4 +54,4 @@ build*
 *.obj
 *.dll
 *.lib
-*.pdb
+*.pdb_codeql_*
