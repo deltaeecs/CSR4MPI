@@ -45,7 +45,7 @@ add_executable(csr4mpi_tests
 )
 
 target_link_libraries(csr4mpi_tests PRIVATE csr4mpi GTest::gtest_main)
-target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_SOURCE_DIR="${CSR4MPI_SOURCE_DIR}")
 if(CSR4MPI_ENABLE_BLAS)
     target_compile_definitions(csr4mpi_tests PRIVATE CSR4MPI_USE_BLAS)
 endif()

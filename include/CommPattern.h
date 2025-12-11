@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Global.h"
 #include "Distribution.h"
+#include "Global.h"
+#include <map>
 #include <vector>
-#include <unordered_map>
 
 namespace csr4mpi {
 
@@ -35,12 +35,14 @@ public:
         int iRank,
         int iWorldSize)
     {
-        std::unordered_map<int, std::vector<cRemoteEntry<Scalar>>> mBuckets;
-        mBuckets.reserve(static_cast<std::size_t>(iWorldSize));
+        std::map<int, std::vector<cRemoteEntry<Scalar>>> mBuckets;
+        // mBuckets.reserve(static_cast<std::size_t>(iWorldSize)); // map doesn't have reserve
 
         for (const cRemoteEntry<Scalar>& cEntry : vEntries) {
             int iOwner = cDistribution.iOwnerRank(cEntry.m_iGlobalRow);
-            mBuckets[iOwner].push_back(cEntry);
+            if (iOwner >= 0 && iOwner < iWorldSize) {
+                mBuckets[iOwner].push_back(cEntry);
+            }
         }
 
         m_vTargetRanks.clear();

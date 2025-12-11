@@ -58,6 +58,10 @@ iSize cRowDistribution::iGlobalRowCount() const
 
 int cRowDistribution::iOwnerRank(iIndex iGlobalRow) const
 {
+    if (iGlobalRow < 0 || iGlobalRow >= static_cast<iIndex>(m_iGlobalRowCount)) {
+        return -1;
+    }
+
     // Binary search over row offsets.
     int iLeft = 0;
     int iRight = static_cast<int>(m_vRowOffsets.size()) - 1;

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Global.h"
 #include "CSRMatrix.h"
 #include "CommPattern.h"
+#include "Global.h"
 #include <algorithm>
 #include <mpi.h>
 #include <vector>
@@ -52,6 +52,14 @@ public:
             vRecvCounts.data(), 1, MPI_INT,
             cComm);
 
+        // DEBUG: Print Send Counts
+        for (int t = 0; t < iWorldSize; ++t) {
+            if (vSendCounts[t] > 0) {
+                printf("[Rank %d] Sending %d entries to Rank %d\n", iRank, vSendCounts[t], t);
+            }
+        }
+        fflush(stdout);
+
         int iTotalSend = 0;
         int iTotalRecv = 0;
         for (int i = 0; i < iWorldSize; ++i) {
@@ -59,16 +67,16 @@ public:
             iTotalRecv += vRecvCounts[static_cast<std::size_t>(i)];
         }
 
-        struct cTriplet {
-            iIndex m_iRow;
-            iIndex m_iCol;
-            Scalar m_vVal;
-        };
+        // Use separate arrays for Rows, Cols, Vals to avoid struct padding/MPI type issues
+        std::vector<iIndex> vSendRowsBuf(static_cast<std::size_t>(iTotalSend));
+        std::vector<iIndex> vSendColsBuf(static_cast<std::size_t>(iTotalSend));
+        std::vector<Scalar> vSendValsBuf(static_cast<std::size_t>(iTotalSend));
 
-        std::vector<cTriplet> vSendBuf(static_cast<std::size_t>(iTotalSend));
-        std::vector<cTriplet> vRecvBuf(static_cast<std::size_t>(iTotalRecv));
+        std::vector<iIndex> vRecvRowsBuf(static_cast<std::size_t>(iTotalRecv));
+        std::vector<iIndex> vRecvColsBuf(static_cast<std::size_t>(iTotalRecv));
+        std::vector<Scalar> vRecvValsBuf(static_cast<std::size_t>(iTotalRecv));
 
-        // Fill send buffer in rank-major order.
+        // Fill send buffers in rank-major order.
         std::vector<int> vOffsets(iWorldSize, 0);
         for (int i = 1; i < iWorldSize; ++i) {
             vOffsets[static_cast<std::size_t>(i)] = vOffsets[static_cast<std::size_t>(i - 1)] + vSendCounts[static_cast<std::size_t>(i - 1)];
@@ -81,9 +89,9 @@ public:
 
             for (iSize i = iBegin; i < iEnd; ++i) {
                 int iPos = vOffsets[static_cast<std::size_t>(iTarget)]++;
-                vSendBuf[static_cast<std::size_t>(iPos)].m_iRow = vSendRows[static_cast<std::size_t>(i)];
-                vSendBuf[static_cast<std::size_t>(iPos)].m_iCol = vSendCols[static_cast<std::size_t>(i)];
-                vSendBuf[static_cast<std::size_t>(iPos)].m_vVal = vValues[static_cast<std::size_t>(i)];
+                vSendRowsBuf[static_cast<std::size_t>(iPos)] = vSendRows[static_cast<std::size_t>(i)];
+                vSendColsBuf[static_cast<std::size_t>(iPos)] = vSendCols[static_cast<std::size_t>(i)];
+                vSendValsBuf[static_cast<std::size_t>(iPos)] = vValues[static_cast<std::size_t>(i)];
             }
         }
 
@@ -96,53 +104,36 @@ public:
             vRecvDispls[static_cast<std::size_t>(i)] = vRecvDispls[static_cast<std::size_t>(i - 1)] + vRecvCounts[static_cast<std::size_t>(i - 1)];
         }
 
-        // Define MPI datatype for cTriplet with correct scalar handling.
-        MPI_Datatype tTripletType;
-        MPI_Datatype tCreatedScalarType = MPI_DATATYPE_NULL;
-        MPI_Datatype tScalarType = mpi_helper::GetMPIDatatype<Scalar>(&tCreatedScalarType);
+        MPI_Datatype tScalarType = mpi_helper::GetMPIDatatype<Scalar>(nullptr);
 
-        {
-            cTriplet cDummy;
-            int iBlockLengths[3] = { 1, 1, 1 };
-            MPI_Aint vDispls[3];
-            MPI_Aint iBase;
+        // Exchange Rows
+        MPI_Alltoallv(vSendRowsBuf.data(), vSendCounts.data(), vSendDispls.data(), MPI_LONG_LONG,
+            vRecvRowsBuf.data(), vRecvCounts.data(), vRecvDispls.data(), MPI_LONG_LONG, cComm);
 
-            MPI_Get_address(&cDummy, &iBase);
-            MPI_Get_address(&cDummy.m_iRow, &vDispls[0]);
-            MPI_Get_address(&cDummy.m_iCol, &vDispls[1]);
-            MPI_Get_address(&cDummy.m_vVal, &vDispls[2]);
+        // Exchange Cols
+        MPI_Alltoallv(vSendColsBuf.data(), vSendCounts.data(), vSendDispls.data(), MPI_LONG_LONG,
+            vRecvColsBuf.data(), vRecvCounts.data(), vRecvDispls.data(), MPI_LONG_LONG, cComm);
 
-            vDispls[0] -= iBase;
-            vDispls[1] -= iBase;
-            vDispls[2] -= iBase;
-
-            MPI_Datatype vTypes[3] = { MPI_LONG_LONG, MPI_LONG_LONG, tScalarType };
-            MPI_Type_create_struct(3, iBlockLengths, vDispls, vTypes, &tTripletType);
-            MPI_Type_commit(&tTripletType);
-        }
-
-        MPI_Alltoallv(vSendBuf.data(),
-            vSendCounts.data(),
-            vSendDispls.data(),
-            tTripletType,
-            vRecvBuf.data(),
-            vRecvCounts.data(),
-            vRecvDispls.data(),
-            tTripletType,
-            cComm);
-
-        MPI_Type_free(&tTripletType);
-        if (tCreatedScalarType != MPI_DATATYPE_NULL) {
-            MPI_Type_free(&tCreatedScalarType);
-        }
+        // Exchange Vals
+        MPI_Alltoallv(vSendValsBuf.data(), vSendCounts.data(), vSendDispls.data(), tScalarType,
+            vRecvValsBuf.data(), vRecvCounts.data(), vRecvDispls.data(), tScalarType, cComm);
 
         // Accumulate received contributions into local CSR matrix.
         // Use binary search for better performance (O(log n) instead of O(n) per lookup)
-        for (const cTriplet& cT : vRecvBuf) {
-            iIndex iGlobalRow = cT.m_iRow;
-            iIndex iGlobalCol = cT.m_iCol;
+        for (size_t k = 0; k < vRecvRowsBuf.size(); ++k) {
+            iIndex iGlobalRow = vRecvRowsBuf[k];
+            iIndex iGlobalCol = vRecvColsBuf[k];
+            Scalar val = vRecvValsBuf[k];
 
             iIndex iLocalRow = static_cast<iIndex>(iGlobalRow - cLocal.iGlobalRowBegin());
+
+            if (iLocalRow < 0 || iLocalRow >= static_cast<iIndex>(vRowPtr.size() - 1)) {
+                printf("[ERROR] CSRComm::Assemble: Received row %lld which is not local! LocalRange=[%lld, %lld)\n",
+                    (long long)iGlobalRow, (long long)cLocal.iGlobalRowBegin(), (long long)cLocal.iGlobalRowEnd());
+                fflush(stdout);
+                continue; // Skip invalid rows to avoid crash
+            }
+
             iIndex iStart = vRowPtr[static_cast<std::size_t>(iLocalRow)];
             iIndex iEnd = vRowPtr[static_cast<std::size_t>(iLocalRow + 1)];
 
@@ -150,10 +141,12 @@ public:
             auto itBegin = vColInd.begin() + iStart;
             auto itEnd = vColInd.begin() + iEnd;
             auto it = std::lower_bound(itBegin, itEnd, iGlobalCol);
-            
+
             if (it != itEnd && *it == iGlobalCol) {
                 std::size_t idx = static_cast<std::size_t>(it - vColInd.begin());
-                vLocalVal[idx] += cT.m_vVal;
+                vLocalVal[idx] += val;
+            } else {
+                // printf("[WARN] CSRComm::Assemble: Received entry (%lld, %lld) but column not found in local structure.\n", (long long)iGlobalRow, (long long)iGlobalCol);
             }
         }
     }
