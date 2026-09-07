@@ -9,4 +9,10 @@ add_executable(csr4mpi_bench_spmv
 )
 target_link_libraries(csr4mpi_bench_spmv PRIVATE csr4mpi)
 target_compile_definitions(csr4mpi_bench_spmv PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CSR4MPI_VALUE_TYPE=${CSR4MPI_VALUE_TYPE})
+
+add_executable(csr4mpi_bench_builder
+    bench_builder.cpp
+)
+target_link_libraries(csr4mpi_bench_builder PRIVATE csr4mpi)
+target_compile_definitions(csr4mpi_bench_builder PRIVATE CSR4MPI_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CSR4MPI_VALUE_TYPE=${CSR4MPI_VALUE_TYPE})
 # MPI is required by the library; no extra conditionals needed here

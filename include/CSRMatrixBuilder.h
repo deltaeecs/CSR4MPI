@@ -3,7 +3,6 @@
 #include "CSRMatrix.h"
 #include "Global.h"
 #include <algorithm>
-#include <unordered_map>
 #include <vector>
 
 namespace csr4mpi {
@@ -59,95 +58,108 @@ public:
         m_vTriplets.clear();
     }
 
-    // Build the CSR matrix with automatic deduplication
+    // Build the CSR matrix with automatic deduplication.
+    //
+    // Sort-based pipeline (issue #7): the previous implementation deduplicated
+    // through a global std::unordered_map, which allocated one heap node per
+    // unique entry (~48-64B), hashed every triplet, and ended with a global
+    // O(n log n) sort — for near-field assemblies with tens of millions of
+    // triplets this dominated both build time and peak memory. The pipeline
+    // below replaces it with:
+    //
+    //   Pass 1  count in-range entries per row -> rowPtr prefix sum   O(N)
+    //   Pass 2  scatter (col, value) into row-segmented slots         O(N)
+    //   Pass 3  per-row std::stable_sort by column + merge of equal-
+    //           column runs (accumulate or keep-last)                 O(sum(nnz_r log nnz_r))
+    //   Pass 4  final row offsets while emitting the CSR arrays
+    //
+    // All passes stream sequentially over memory; no hash nodes, no rehash,
+    // no global sort. std::stable_sort preserves insertion order within equal
+    // columns, so duplicates accumulate in the same order (and to the same
+    // bits) as the previous hash-map implementation.
+    //
     // iGlobalRowBegin: starting global row index (typically 0 for a standalone local matrix)
     // iGlobalRowEnd: ending global row index (exclusive)
     // iGlobalColCount: total number of columns
     // bAccumulateDuplicates: if true, accumulate duplicate entries; if false, keep last value
     cCSRMatrix<Scalar> Build(iSize iGlobalRowBegin, iSize iGlobalRowEnd, iSize iGlobalColCount, bool bAccumulateDuplicates = true) const
     {
-        struct cKey {
-            iIndex r;
-            iIndex c;
-            bool operator==(const cKey& other) const { return r == other.r && c == other.c; }
-        };
-        struct cKeyHash {
-            std::size_t operator()(const cKey& k) const noexcept
-            {
-                // Use a robust hash combining function to reduce collisions
-                // Based on boost::hash_combine algorithm
-                std::size_t seed = std::hash<iIndex>()(k.r);
-                seed ^= std::hash<iIndex>()(k.c) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-                return seed;
-            }
-        };
+        const iSize iLocalRows = iGlobalRowEnd - iGlobalRowBegin;
 
-        iSize iLocalRows = iGlobalRowEnd - iGlobalRowBegin;
-        
-        // Deduplicate using hash map
-        std::unordered_map<cKey, Scalar, cKeyHash> mEntries;
-        mEntries.reserve(m_vTriplets.size());
-
+        // Pass 1: count in-range entries per row (duplicates included)
+        std::vector<iIndex> vRowPtr(static_cast<std::size_t>(iLocalRows + 1), 0);
         for (const auto& triplet : m_vTriplets) {
             // Validate row is within range
             if (triplet.m_iRow < iGlobalRowBegin || triplet.m_iRow >= iGlobalRowEnd) {
                 continue; // Skip out-of-range entries
             }
-            
-            cKey key { triplet.m_iRow, triplet.m_iCol };
-            auto it = mEntries.find(key);
-            if (it == mEntries.end()) {
-                mEntries.emplace(key, triplet.m_vValue);
-            } else {
-                if (bAccumulateDuplicates) {
-                    it->second += triplet.m_vValue;
-                } else {
-                    it->second = triplet.m_vValue; // Keep last value
-                }
-            }
+            ++vRowPtr[static_cast<std::size_t>(triplet.m_iRow - iGlobalRowBegin + 1)];
         }
 
-        // Convert to sorted triplets
-        struct cEntry {
-            iIndex r;
-            iIndex c;
-            Scalar v;
-        };
-        std::vector<cEntry> vSortedEntries;
-        vSortedEntries.reserve(mEntries.size());
-        
-        for (const auto& p : mEntries) {
-            vSortedEntries.push_back({ p.first.r, p.first.c, p.second });
-        }
-
-        // Sort by row then column
-        std::sort(vSortedEntries.begin(), vSortedEntries.end(), [](const cEntry& a, const cEntry& b) {
-            if (a.r != b.r)
-                return a.r < b.r;
-            return a.c < b.c;
-        });
-
-        // Build CSR arrays
-        std::vector<iIndex> vRowPtr(static_cast<std::size_t>(iLocalRows + 1), 0);
-        std::vector<iIndex> vColInd;
-        std::vector<Scalar> vValues;
-        
-        vColInd.reserve(vSortedEntries.size());
-        vValues.reserve(vSortedEntries.size());
-
-        for (const auto& e : vSortedEntries) {
-            iIndex iLocalRow = e.r - iGlobalRowBegin;
-            vRowPtr[static_cast<std::size_t>(iLocalRow + 1)]++;
-            vColInd.push_back(e.c);
-            vValues.push_back(e.v);
-        }
-
-        // Prefix sum to get row pointers
+        // Prefix sum -> segment bounds per row
         for (iSize r = 0; r < iLocalRows; ++r) {
             vRowPtr[static_cast<std::size_t>(r + 1)] += vRowPtr[static_cast<std::size_t>(r)];
         }
 
-        return cCSRMatrix<Scalar>(iGlobalRowBegin, iGlobalRowEnd, iGlobalColCount, 
+        const std::size_t nTotal = static_cast<std::size_t>(vRowPtr.back());
+
+        // Pass 2: scatter (col, value) pairs into their row segment,
+        // preserving insertion order within each row
+        struct cKV {
+            iIndex c;
+            Scalar v;
+        };
+        std::vector<cKV> vTmp(nTotal);
+        std::vector<iIndex> vCursor(vRowPtr.begin(), vRowPtr.end() - 1);
+        for (const auto& triplet : m_vTriplets) {
+            if (triplet.m_iRow < iGlobalRowBegin || triplet.m_iRow >= iGlobalRowEnd) {
+                continue;
+            }
+            const std::size_t r = static_cast<std::size_t>(triplet.m_iRow - iGlobalRowBegin);
+            vTmp[static_cast<std::size_t>(vCursor[r]++)] = cKV { triplet.m_iCol, triplet.m_vValue };
+        }
+
+        // Pass 3 + 4: per-row stable sort by column, merge equal-column runs,
+        // and emit the compacted CSR arrays. Slot r of vRowPtr is overwritten
+        // with the final offset after its segment [vRowPtr[r], vRowPtr[r+1])
+        // has been consumed, so the old prefix sums stay readable while the
+        // final ones are written in place.
+        std::vector<iIndex> vColInd;
+        std::vector<Scalar> vValues;
+        vColInd.reserve(nTotal);
+        vValues.reserve(nTotal);
+
+        for (iSize r = 0; r < iLocalRows; ++r) {
+            const std::size_t s = static_cast<std::size_t>(vRowPtr[static_cast<std::size_t>(r)]);
+            const std::size_t e = static_cast<std::size_t>(vRowPtr[static_cast<std::size_t>(r + 1)]);
+
+            std::stable_sort(vTmp.begin() + s, vTmp.begin() + e,
+                [](const cKV& a, const cKV& b) { return a.c < b.c; });
+
+            vRowPtr[static_cast<std::size_t>(r)] = static_cast<iIndex>(vColInd.size());
+
+            std::size_t k = s;
+            while (k < e) {
+                std::size_t m = k + 1;
+                while (m < e && vTmp[m].c == vTmp[k].c) {
+                    ++m;
+                }
+                Scalar vAgg = vTmp[k].v;
+                for (std::size_t q = k + 1; q < m; ++q) {
+                    if (bAccumulateDuplicates) {
+                        vAgg = vAgg + vTmp[q].v;
+                    } else {
+                        vAgg = vTmp[q].v; // Keep last value (stable order -> last inserted)
+                    }
+                }
+                vColInd.push_back(vTmp[k].c);
+                vValues.push_back(vAgg);
+                k = m;
+            }
+        }
+        vRowPtr[static_cast<std::size_t>(iLocalRows)] = static_cast<iIndex>(vColInd.size());
+
+        return cCSRMatrix<Scalar>(iGlobalRowBegin, iGlobalRowEnd, iGlobalColCount,
                                   std::move(vRowPtr), std::move(vColInd), std::move(vValues));
     }
 
