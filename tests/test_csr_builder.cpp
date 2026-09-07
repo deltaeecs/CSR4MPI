@@ -2,6 +2,10 @@
 #include "CSRMatrix.h"
 #include "Operations.h"
 #include <gtest/gtest.h>
+#include <complex>
+#include <cstring>
+#include <random>
+#include <unordered_map>
 #include <vector>
 
 using namespace csr4mpi;
@@ -437,15 +441,240 @@ TEST(CSRBuilderTest, BuiltMatrixAlwaysValid)
 {
     // Any matrix built with the builder should be valid
     cCSRMatrixBuilder<Scalar> builder;
-    
+
     // Add random entries
     builder.AddEntry(5, 3, 1.0);
     builder.AddEntry(2, 7, 2.0);
     builder.AddEntry(8, 1, 3.0);
     builder.AddEntry(0, 9, 4.0);
     builder.AddEntry(2, 7, 5.0); // duplicate
-    
+
     auto matrix = builder.Build(0, 10, 10);
-    
+
     EXPECT_TRUE(ValidateCSRMatrix(matrix));
+}
+
+// ---------------------------------------------------------------------------
+// Bit-exact equivalence against the previous (hash-map) implementation.
+// The reference below is a verbatim copy of the pre-issue-7 Build() pipeline;
+// it exists only inside the tests to guarantee the sort-based rewrite produces
+// identical structure AND identical floating-point bit patterns.
+// ---------------------------------------------------------------------------
+namespace refimpl {
+
+template <typename Scalar>
+cCSRMatrix<Scalar> BuildReference(const std::vector<cTriplet<Scalar>>& vTriplets,
+    iSize iGlobalRowBegin, iSize iGlobalRowEnd, iSize iGlobalColCount, bool bAccumulateDuplicates)
+{
+    struct cKey {
+        iIndex r;
+        iIndex c;
+        bool operator==(const cKey& other) const { return r == other.r && c == other.c; }
+    };
+    struct cKeyHash {
+        std::size_t operator()(const cKey& k) const noexcept
+        {
+            std::size_t seed = std::hash<iIndex>()(k.r);
+            seed ^= std::hash<iIndex>()(k.c) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
+
+    iSize iLocalRows = iGlobalRowEnd - iGlobalRowBegin;
+
+    std::unordered_map<cKey, Scalar, cKeyHash> mEntries;
+    mEntries.reserve(vTriplets.size());
+
+    for (const auto& triplet : vTriplets) {
+        if (triplet.m_iRow < iGlobalRowBegin || triplet.m_iRow >= iGlobalRowEnd)
+            continue;
+        cKey key { triplet.m_iRow, triplet.m_iCol };
+        auto it = mEntries.find(key);
+        if (it == mEntries.end()) {
+            mEntries.emplace(key, triplet.m_vValue);
+        } else {
+            if (bAccumulateDuplicates)
+                it->second += triplet.m_vValue;
+            else
+                it->second = triplet.m_vValue;
+        }
+    }
+
+    struct cEntry {
+        iIndex r;
+        iIndex c;
+        Scalar v;
+    };
+    std::vector<cEntry> vSortedEntries;
+    vSortedEntries.reserve(mEntries.size());
+    for (const auto& p : mEntries)
+        vSortedEntries.push_back({ p.first.r, p.first.c, p.second });
+
+    std::sort(vSortedEntries.begin(), vSortedEntries.end(), [](const cEntry& a, const cEntry& b) {
+        if (a.r != b.r)
+            return a.r < b.r;
+        return a.c < b.c;
+    });
+
+    std::vector<iIndex> vRowPtr(static_cast<std::size_t>(iLocalRows + 1), 0);
+    std::vector<iIndex> vColInd;
+    std::vector<Scalar> vValues;
+    vColInd.reserve(vSortedEntries.size());
+    vValues.reserve(vSortedEntries.size());
+
+    for (const auto& e : vSortedEntries) {
+        iIndex iLocalRow = e.r - iGlobalRowBegin;
+        vRowPtr[static_cast<std::size_t>(iLocalRow + 1)]++;
+        vColInd.push_back(e.c);
+        vValues.push_back(e.v);
+    }
+    for (iSize r = 0; r < iLocalRows; ++r) {
+        vRowPtr[static_cast<std::size_t>(r + 1)] += vRowPtr[static_cast<std::size_t>(r)];
+    }
+
+    return cCSRMatrix<Scalar>(iGlobalRowBegin, iGlobalRowEnd, iGlobalColCount,
+        std::move(vRowPtr), std::move(vColInd), std::move(vValues));
+}
+
+} // namespace refimpl
+
+template <typename Scalar>
+static void ExpectBitwiseEqual(const cCSRMatrix<Scalar>& a, const cCSRMatrix<Scalar>& b)
+{
+    ASSERT_EQ(a.iGlobalRowBegin(), b.iGlobalRowBegin());
+    ASSERT_EQ(a.iGlobalRowEnd(), b.iGlobalRowEnd());
+    ASSERT_EQ(a.iGlobalColCount(), b.iGlobalColCount());
+    ASSERT_EQ(a.vRowPtr(), b.vRowPtr());
+    ASSERT_EQ(a.vColInd(), b.vColInd());
+    ASSERT_EQ(a.vValues().size(), b.vValues().size());
+    // Bitwise comparison: identical accumulation order must give identical bits
+    for (std::size_t k = 0; k < a.vValues().size(); ++k) {
+        if constexpr (csr4mpi::is_complex_v<Scalar>) {
+            EXPECT_EQ(std::memcmp(&a.vValues()[k], &b.vValues()[k], sizeof(Scalar)), 0)
+                << "value bits differ at " << k;
+        } else {
+            EXPECT_EQ(a.vValues()[k], b.vValues()[k]) << "value differs at " << k;
+        }
+    }
+}
+
+// Randomized triplets with duplicates: accumulate mode
+TEST(CSRBuilderTest, BitwiseEqualsReferenceAccumulate)
+{
+    std::mt19937_64 rng(12345);
+    std::uniform_int_distribution<iIndex> rowDist(0, 199);
+    std::uniform_int_distribution<iIndex> colDist(0, 299);
+    std::uniform_real_distribution<double> valDist(-10.0, 10.0);
+
+    std::vector<cTriplet<Scalar>> triplets;
+    triplets.reserve(20000);
+    for (int k = 0; k < 20000; ++k)
+        triplets.emplace_back(rowDist(rng), colDist(rng), static_cast<Scalar>(valDist(rng)));
+
+    cCSRMatrixBuilder<Scalar> builder;
+    builder.AddEntries(triplets);
+    auto got = builder.Build(0, 200, 300, true);
+    auto want = refimpl::BuildReference(triplets, 0, 200, 300, true);
+    ExpectBitwiseEqual(got, want);
+    EXPECT_TRUE(ValidateCSRMatrix(got));
+}
+
+// Randomized triplets with duplicates: keep-last mode
+TEST(CSRBuilderTest, BitwiseEqualsReferenceKeepLast)
+{
+    std::mt19937_64 rng(54321);
+    std::uniform_int_distribution<iIndex> rowDist(0, 99);
+    std::uniform_int_distribution<iIndex> colDist(0, 149);
+    std::uniform_real_distribution<double> valDist(-10.0, 10.0);
+
+    std::vector<cTriplet<Scalar>> triplets;
+    triplets.reserve(15000);
+    for (int k = 0; k < 15000; ++k)
+        triplets.emplace_back(rowDist(rng), colDist(rng), static_cast<Scalar>(valDist(rng)));
+
+    cCSRMatrixBuilder<Scalar> builder;
+    builder.AddEntries(triplets);
+    auto got = builder.Build(0, 100, 150, false);
+    auto want = refimpl::BuildReference(triplets, 0, 100, 150, false);
+    ExpectBitwiseEqual(got, want);
+}
+
+// MLFMA-like near-field pattern: block-dense bands + injected duplicates,
+// including out-of-range rows that must be filtered identically
+TEST(CSRBuilderTest, BitwiseEqualsReferenceNearFieldPattern)
+{
+    std::mt19937_64 rng(777);
+    std::uniform_real_distribution<double> valDist(-1.0, 1.0);
+    const int nBlocks = 64;
+    const int blockSize = 8;
+    const int nRows = nBlocks * blockSize;
+
+    auto idx = [](int blk, int i) { return static_cast<iIndex>(blk) * blockSize + i; };
+    std::vector<cTriplet<Scalar>> triplets;
+    for (int bi = 0; bi < nBlocks; ++bi) {
+        for (int bj = std::max(0, bi - 7); bj <= std::min(nBlocks - 1, bi + 7); ++bj) {
+            for (int i = 0; i < blockSize; ++i)
+                for (int j = 0; j < blockSize; ++j)
+                    triplets.emplace_back(idx(bi, i), idx(bj, j), static_cast<Scalar>(valDist(rng)));
+        }
+    }
+    // Re-emit 10% duplicates (exercises accumulation) and add out-of-range rows
+    std::uniform_int_distribution<std::size_t> pick(0, triplets.size() - 1);
+    const std::size_t nDup = triplets.size() / 10;
+    triplets.reserve(triplets.size() + nDup + 100);
+    for (std::size_t k = 0; k < nDup; ++k) {
+        const auto& t = triplets[pick(rng)];
+        triplets.emplace_back(t.m_iRow, t.m_iCol, static_cast<Scalar>(valDist(rng)));
+    }
+    for (int k = 0; k < 100; ++k)
+        triplets.emplace_back(nRows + k, 0, static_cast<Scalar>(valDist(rng))); // out of range
+
+    for (bool accumulate : { true, false }) {
+        cCSRMatrixBuilder<Scalar> builder;
+        builder.AddEntries(triplets);
+        auto got = builder.Build(0, nRows, nRows, accumulate);
+        auto want = refimpl::BuildReference(triplets, 0, nRows, nRows, accumulate);
+        ExpectBitwiseEqual(got, want);
+        EXPECT_TRUE(ValidateCSRMatrix(got));
+    }
+}
+
+// Empty input and empty row range remain trivially equal
+TEST(CSRBuilderTest, BitwiseEqualsReferenceEdgeCases)
+{
+    // No entries at all
+    std::vector<cTriplet<Scalar>> empty;
+    auto gotA = cCSRMatrixBuilder<Scalar>().Build(0, 5, 5);
+    auto wantA = refimpl::BuildReference(empty, 0, 5, 5, true);
+    ExpectBitwiseEqual(gotA, wantA);
+
+    // All entries out of range
+    std::vector<cTriplet<Scalar>> outOfRange = {
+        cTriplet<Scalar>(100, 0, static_cast<Scalar>(1.0)),
+        cTriplet<Scalar>(200, 1, static_cast<Scalar>(2.0)),
+    };
+    auto gotB = cCSRMatrixBuilder<Scalar>().Build(0, 10, 10);
+    auto wantB = refimpl::BuildReference(outOfRange, 0, 10, 10, true);
+    ExpectBitwiseEqual(gotB, wantB);
+    EXPECT_EQ(gotB.vColInd().size(), 0u);
+}
+
+// Complex scalar accumulation order must also match bit-for-bit
+TEST(CSRBuilderTest, BitwiseEqualsReferenceComplex)
+{
+    using CScalar = std::complex<double>;
+    std::mt19937_64 rng(2468);
+    std::uniform_int_distribution<iIndex> rowDist(0, 49);
+    std::uniform_int_distribution<iIndex> colDist(0, 79);
+    std::uniform_real_distribution<double> valDist(-1.0, 1.0);
+
+    std::vector<cTriplet<CScalar>> triplets;
+    for (int k = 0; k < 8000; ++k)
+        triplets.emplace_back(rowDist(rng), colDist(rng), CScalar(valDist(rng), valDist(rng)));
+
+    cCSRMatrixBuilder<CScalar> builder;
+    builder.AddEntries(triplets);
+    auto got = builder.Build(0, 50, 80, true);
+    auto want = refimpl::BuildReference(triplets, 0, 50, 80, true);
+    ExpectBitwiseEqual(got, want);
 }
